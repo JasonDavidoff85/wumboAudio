@@ -4,70 +4,79 @@ extern crate coreaudio;
 
 use coreaudio::audio_unit::render_callback::{self, data};
 use coreaudio::audio_unit::{AudioUnit, IOType, SampleFormat};
-use std::f64::consts::PI;
+use std::thread;
+use std::sync::mpsc;
 
-struct SineWaveGenerator {
-    time: f64,
-    /// generated frequency in Hz
-    freq: f64,
-    /// magnitude of generated signal
-    volume: f64,
-}
+mod lfo;
+use lfo::LFO;
 
-impl SineWaveGenerator {
-    fn new(freq: f64, volume: f64) -> Self {
-        SineWaveGenerator {
-            time: 0.,
-            freq,
-            volume,
-        }
-    }
-}
+mod mixer;
+mod wave;
+mod vco;
+mod generator;
+use generator::Generator;
 
-impl Iterator for SineWaveGenerator {
-    type Item = f32;
-    fn next(&mut self) -> Option<f32> {
-        self.time += 1. / 44_100.;
-        let output = ((self.freq * self.time * PI * 2.).sin() * self.volume) as f32;
-        Some(output)
-    }
-}
+type Args = render_callback::Args<data::NonInterleaved<f32>>;
+
 
 fn main() -> Result<(), coreaudio::Error> {
-    let frequency_hz = 440.;
-    let volume = 0.15;
-    let mut samples = SineWaveGenerator::new(frequency_hz, volume);
+    let volume = 0.5;
+    let (tx, rx) = mpsc::channel();
 
-    // Construct an Output audio unit that delivers audio to the default output device.
-    let mut audio_unit = AudioUnit::new(IOType::DefaultOutput)?;
+    let handle = thread::spawn(move || -> Result<(), coreaudio::Error> {
 
-    // Read the input format. This is counterintuitive, but it's the format used when sending
-    // audio data to the AudioUnit representing the output device. This is separate from the
-    // format the AudioUnit later uses to send the data to the hardware device.
-    let stream_format = audio_unit.input_stream_format()?;
-    println!("{:#?}", &stream_format);
+        // Construct an Output audio unit that delivers audio to the default output device.
+        let mut audio_unit = AudioUnit::new(IOType::DefaultOutput)?;
 
-    // For this example, our sine wave expects `f32` data.
-    assert!(SampleFormat::F32 == stream_format.sample_format);
+        // Read the input format. This is counterintuitive, but it's the format used when sending
+        // audio data to the AudioUnit representing the output device. This is separate from the
+        // format the AudioUnit later uses to send the data to the hardware device.
+        let stream_format = audio_unit.input_stream_format()?;
+        println!("{:#?}", &stream_format);
+         // For this example, our sine wave expects `f32` data.
+        assert!(SampleFormat::F32 == stream_format.sample_format);
 
-    type Args = render_callback::Args<data::NonInterleaved<f32>>;
-    audio_unit.set_render_callback(move |args| {
-        let Args {
-            num_frames,
-            mut data,
-            ..
-        } = args;
-        for i in 0..num_frames {
-            let sample = samples.next().unwrap();
-            for channel in data.channels_mut() {
-                channel[i] = sample;
-            }
+        audio_unit.start()?;
+
+        loop {
+            let recieved = rx.try_recv();
+            match recieved {
+                Ok(p) => {
+                    println!("got message"); 
+                    let mut mixer = mixer::Renderer::new(volume);
+                    // let mut lfo = LFO::new(20., 50.);
+                    let samples = vco::VCO::new(p, volume as f64, wave::sine);
+                    let samples2 = vco::VCO::new(350., volume as f64, wave::sine);
+                    mixer.vcos.push(Box::new(samples));
+                    mixer.vcos.push(Box::new(samples2));
+                    // let mut samples2 = wave::Wave::new(300., volume, wave::sine);
+                    audio_unit.set_render_callback(move |args| {
+                        let Args {
+                            num_frames,
+                            mut data,
+                            ..
+                        } = args;
+                        for i in 0..num_frames {
+                            // let sample = samples.next().unwrap();
+                            // let sample2 = samples.next().unwrap();
+                            for channel in data.channels_mut() {
+                                channel[i] = mixer.out();
+                            }
+                        }
+                        Ok::<(), ()>(())
+                    })?;
+                }
+                Err(e) => (),
+            };
+            std::thread::sleep(std::time::Duration::from_millis(1000));
         }
-        Ok(())
-    })?;
-    audio_unit.start()?;
+    });
+    
+    std::thread::sleep(std::time::Duration::from_millis(1000));
+    tx.send(440.).unwrap();
+    // std::thread::sleep(std::time::Duration::from_millis(1000));
 
-    std::thread::sleep(std::time::Duration::from_millis(3000));
+    _ = handle.join().unwrap();
 
     Ok(())
 }
