@@ -5,7 +5,7 @@ use crate::{vco::VCO, generator::Generator};
 /// It is processed in sequential order and there is no adding
 /// A bus represents a single audio source/voice
 pub struct Bus {
-    time: f64,
+    time: f32,
     pub signals: Vec<Box<dyn Generator<Item = f32>>>
 }
 

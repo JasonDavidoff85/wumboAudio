@@ -1,24 +1,24 @@
-use std::f64::consts::PI;
+use std::f32::consts::PI;
 
 use crate::generator::Generator;
 
 pub struct LFO {
-    pub rate: f64,
-    pub width: f64,
-    time: f64
+    pub rate: f32,
+    pub width: f32,
+    time: f32
 }
 
 impl LFO {
-    pub fn new(rate: f64, width: f64) -> Self {
+    pub fn new(rate: f32, width: f32) -> Self {
         LFO {rate, width, time: 0.}
     }
 }
 
 impl Generator for LFO {
-    type Item = f64;
+    type Item = f32;
     fn next(&mut self) -> Option<Self::Item> {
         self.time += 1. / 44_100.;
-        let output = ((self.rate as f64 * self.time * PI * 2.).sin() * self.width as f64) as Self::Item;
+        let output = ((self.rate * self.time * PI * 2.).sin() * self.width) as Self::Item;
         Some(output)
     }
 }
