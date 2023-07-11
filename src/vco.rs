@@ -4,15 +4,15 @@ use crate::generator::Generator;
 type WaveShape = fn(f64, f64, f64) -> f32;
 
 #[derive(Copy, Clone)]
-pub struct VCO<T> {
+pub struct VCO<T, U> {
     shape: WaveShape,
     time: f64,
     pub freq: T,
-    volume: f64
+    pub volume: U
 }
 
-impl<T> VCO<T> {
-    pub fn new(freq: T, volume: f64, shape: WaveShape) -> Self {
+impl<T, U> VCO<T, U> {
+    pub fn new(freq: T, volume: U, shape: WaveShape) -> Self {
         VCO {
             time: 0.,
             freq,
@@ -22,11 +22,11 @@ impl<T> VCO<T> {
     }
 }
 
-impl<T> Generator for VCO<T> where T: Generator<Item=f64> {
+impl<T, U> Generator for VCO<T, U> where T: Generator<Item=f64>, U: Generator<Item=f64>{
     type Item = f32;
     fn next(&mut self) -> Option<Self::Item> {
         self.time += 1. / 44_100.;
-        let output = (self.shape)(self.freq.next().unwrap(), self.time, self.volume);
+        let output = (self.shape)(self.freq.next().unwrap(), self.time, self.volume.next().unwrap());
         Some(output)
     }
 }

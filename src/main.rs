@@ -10,6 +10,7 @@ use std::sync::mpsc;
 mod lfo;
 use lfo::LFO;
 
+mod bus;
 mod mixer;
 mod wave;
 mod vco;
@@ -46,14 +47,19 @@ fn main() -> Result<(), coreaudio::Error> {
                     println!("got message");
                     // let mut filter = filter::Filter::new(1000., 1., 0.);
                     let mut mixer = mixer::Renderer::new(volume);
-                    // let mut lfo = LFO::new(20., 50.);
-                    let samples = vco::VCO::new(p, 0.8 as f64, wave::sine);
+                    let mut bus = bus::Bus::new();
+                    
+                    let lfo = LFO::new(0.1, 10.);
+                    let samples = vco::VCO::new(p, 0.8, wave::sine);
+                    let samples2 = vco::VCO::new(20., lfo, wave::sine); 
+                    let samples3 = vco::VCO::new(40., 0.8, wave::sine); 
 
-                    let samples2 = vco::VCO::new(55., 0.8 as f64, wave::sine); 
-                    mixer.vcos.push(Box::new(samples));
-                    mixer.vcos.push(Box::new(samples2));
-                    // mixer.vcos.push(Box::new(samples2));
-                    // let mut samples2 = wave::Wave::new(300., volume, wave::sine);
+                    bus.push(samples);
+                    mixer.add_source(bus);
+                    // mixers can also just take individual sound sources like vcos
+                    mixer.add_source(samples2);
+                    mixer.add_source(samples3);
+                    
                     audio_unit.set_render_callback(move |args| {
                         let Args {
                             num_frames,
@@ -61,8 +67,6 @@ fn main() -> Result<(), coreaudio::Error> {
                             ..
                         } = args;
                         for i in 0..num_frames {
-                            // let sample = samples.next().unwrap();
-                            // let sample2 = samples.next().unwrap();
                             for channel in data.channels_mut() {
                                 // channel[i] = filter.next(mixer.out() as f64) as f32;
                                 channel[i] = mixer.out()
