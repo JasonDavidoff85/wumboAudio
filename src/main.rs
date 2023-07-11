@@ -14,6 +14,7 @@ mod mixer;
 mod wave;
 mod vco;
 mod generator;
+mod filter;
 use generator::Generator;
 
 type Args = render_callback::Args<data::NonInterleaved<f32>>;
@@ -42,13 +43,16 @@ fn main() -> Result<(), coreaudio::Error> {
             let recieved = rx.try_recv();
             match recieved {
                 Ok(p) => {
-                    println!("got message"); 
+                    println!("got message");
+                    // let mut filter = filter::Filter::new(1000., 1., 0.);
                     let mut mixer = mixer::Renderer::new(volume);
                     // let mut lfo = LFO::new(20., 50.);
-                    let samples = vco::VCO::new(p, volume as f64, wave::sine);
-                    let samples2 = vco::VCO::new(350., volume as f64, wave::sine);
+                    let samples = vco::VCO::new(p, 0.8 as f64, wave::sine);
+
+                    let samples2 = vco::VCO::new(55., 0.8 as f64, wave::sine); 
                     mixer.vcos.push(Box::new(samples));
                     mixer.vcos.push(Box::new(samples2));
+                    // mixer.vcos.push(Box::new(samples2));
                     // let mut samples2 = wave::Wave::new(300., volume, wave::sine);
                     audio_unit.set_render_callback(move |args| {
                         let Args {
@@ -60,7 +64,8 @@ fn main() -> Result<(), coreaudio::Error> {
                             // let sample = samples.next().unwrap();
                             // let sample2 = samples.next().unwrap();
                             for channel in data.channels_mut() {
-                                channel[i] = mixer.out();
+                                // channel[i] = filter.next(mixer.out() as f64) as f32;
+                                channel[i] = mixer.out()
                             }
                         }
                         Ok::<(), ()>(())
@@ -73,7 +78,7 @@ fn main() -> Result<(), coreaudio::Error> {
     });
     
     std::thread::sleep(std::time::Duration::from_millis(1000));
-    tx.send(440.).unwrap();
+    tx.send(60.).unwrap();
     // std::thread::sleep(std::time::Duration::from_millis(1000));
 
     _ = handle.join().unwrap();
