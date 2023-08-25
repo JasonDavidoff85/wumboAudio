@@ -22,7 +22,7 @@ type Args = render_callback::Args<data::NonInterleaved<f32>>;
 
 
 fn main() -> Result<(), coreaudio::Error> {
-    let volume = 0.5;
+    let volume = 1.;
     let (tx, rx) = mpsc::channel();
 
     let handle = thread::spawn(move || -> Result<(), coreaudio::Error> {
@@ -47,18 +47,19 @@ fn main() -> Result<(), coreaudio::Error> {
                     println!("got message");
                     // let mut filter = filter::Filter::new(1000., 1., 0.);
                     let mut mixer = mixer::Renderer::new(volume);
-                    let mut bus = bus::Bus::new();
+                    // let mut bus = bus::Bus::new();
                     
-                    let lfo = LFO::new(0.1, 10.);
-                    let samples = vco::VCO::new(p, 0.8, wave::sine);
-                    let samples2 = vco::VCO::new(20., lfo, wave::sine); 
-                    let samples3 = vco::VCO::new(40., 0.8, wave::sine); 
+                    let lfo = LFO::new(440., 20., 1., wave::sine);
+                    // let mut samples = vco::VCO::new(p, 0.4, wave::saw);
+                    let samples2 = vco::VCO::new(lfo, 0.4, wave::square); 
+                    // let mut samples3 = vco::VCO::new(300., 0.2, wave::sine); 
 
-                    bus.push(samples);
-                    mixer.add_source(bus);
+                    // bus.push(samples);
+                    // bus.push(samples);
+                    // mixer.add_source(bus);
                     // mixers can also just take individual sound sources like vcos
                     mixer.add_source(samples2);
-                    mixer.add_source(samples3);
+                    // mixer.add_source(samples2);
                     
                     audio_unit.set_render_callback(move |args| {
                         let Args {
@@ -66,10 +67,13 @@ fn main() -> Result<(), coreaudio::Error> {
                             mut data,
                             ..
                         } = args;
+                        // num_frames defaults to 512 or 9 bits
                         for i in 0..num_frames {
+                            let sample = mixer.out();
                             for channel in data.channels_mut() {
                                 // channel[i] = filter.next(mixer.out() as f64) as f32;
-                                channel[i] = mixer.out()
+                                // channel[i] = mixer.out()
+                                channel[i] = sample
                             }
                         }
                         Ok::<(), ()>(())
@@ -82,7 +86,7 @@ fn main() -> Result<(), coreaudio::Error> {
     });
     
     std::thread::sleep(std::time::Duration::from_millis(1000));
-    tx.send(60.).unwrap();
+    tx.send(440.).unwrap();
     // std::thread::sleep(std::time::Duration::from_millis(1000));
 
     _ = handle.join().unwrap();
